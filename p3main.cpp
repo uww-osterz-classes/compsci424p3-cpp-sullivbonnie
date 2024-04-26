@@ -1,5 +1,5 @@
 /* COMPSCI 424 Program 3
-   Name:
+   Name: Bonnie Sullivan
    
    p3main.cpp: contains the main function for this program.
 
@@ -29,6 +29,11 @@ using namespace std; // if you want to type out "std::" every time, delete this
    time, so I'm allowing it here.
 */
 
+    int* Available;    // Available units of each resource
+    int** Max;         // Max possible claim by each process for each resource
+    int** Allocation;  // Num resources currently allocated to each process
+    int** Request;     // Request edges in claim graph (????)
+    int** Need;
 
 /*
   Arguments:
@@ -81,8 +86,66 @@ int main (int argc, char *argv[]) {
         // way you like as long as they have the correct size
         // (unfortunately, you might not be able to use sscanf for this...)
 
+        Available = new int[num_resources];    // Available units of each resource
+        Max = new int*[num_processes];        // Max possible claim by each process for each resource
+        Allocation = new int*[num_processes]; // Num resources currently allocated to each process
+        Request = new int* [num_processes];   // Request edges in claim graph (????)
+        Need = new int* [num_processes];
+        for (int i = 0; i < num_processes; i++) {
+            Allocation[i] = new int[num_resources];
+            Max[i] = new int[num_resources];
+            Request[i] = new int[num_resources];
+            Need[i] = new int[num_resources];
+        }
+        
         // 3. Use the rest of the setup file to initialize the data structures
+        
+        // Initialize Available[m]
+        for (int i = 0; i < num_resources; i++) {
+            setup_file >> Available[i];
+        }
+        cout << "Available" << endl;
+        for (int i = 0; i < num_resources; i++) {
+            cout << Available[i] << " ";
+        }
+        getline(setup_file, line);
 
+        // Initialize Max[n][m]
+        for (int i = 0; i < num_processes; i++) {
+            for (int j = 0; j < num_resources; j++) {
+                setup_file >> Max[i][j];
+            }
+        }
+        cout << "Max" << endl;
+        for (int i = 0; i < num_processes; i++) {
+            for (int j = 0; j < num_resources; j++) {
+                cout << Max[i][j] << " ";
+            }
+            cout << endl;
+        }
+        getline(setup_file, line);
+
+        // Initialize Allocation[n][m]
+        for (int i = 0; i < num_processes; i++) {
+            for (int j = 0; j < num_resources; j++) {
+                setup_file >> Allocation[i][j];
+            }
+        }
+        cout << "Allocation" << endl;
+        for (int i = 0; i < num_processes; i++) {
+            for (int j = 0; j < num_resources; j++) {
+                cout << Allocation[i][j] << " ";
+            }
+            cout << endl;
+        }
+        getline(setup_file, line);  
+
+        // Initialize Need (Potential Requests) = Max - Allocation
+        for (int i = 0; i < num_processes; i++) {
+            for (int j = 0; j < num_resources; j++) {
+                Need[i][j] = Max[i][j] - Allocation[i][j];
+            }
+        }
 
         // Done reading the file, so close it
         setup_file.close();
@@ -91,6 +154,21 @@ int main (int argc, char *argv[]) {
     // 4. Check initial conditions to ensure that the system is
     // beginning in a safe state: see "Check initial conditions"
     // in the Program 3 instructions
+    for (int i = 0; i < num_processes; i++) {
+        for (int j = 0; j < num_resources; j++) {
+            if (Allocation[i][j] > Max[i][j]) {
+                cout << "Request Denied" << endl;
+                return 0;
+            }
+            // Need (Potential Requests) = Max - Allocation
+            // The graph is completely reducible if potential requests <= Available units
+            if (Need[i][j] > Available[i]) {
+                cout << "Request Denied" << endl;
+                return 0;
+            }
+            // Continue with the program if all conditions are met
+        }
+    }
 
     // 5. Go into either manual or automatic mode, depending on
     // the value of args[0]; you could implement these two modes
@@ -98,5 +176,66 @@ int main (int argc, char *argv[]) {
     // with their own main methods, or as additional code within
     // this main method.
     
+    // Enter manual mode
+    if (argv[0] == "manual") {
+        string userCommand;
+        string junkStr;
+        int i;
+        int j;
+        int k;
+        cout << "Entering manual mode. Please input a command: " << endl;
+        cout << "(request/release I of J for K, or end to quit)" << endl;
+        cin >> userCommand; // request/release
+        if (userCommand == "request" || userCommand == "release") {
+            cin >> i;           // I
+            cin >> junkStr;     // of
+            cin >> j;           // J
+            cin >> junkStr;     // for 
+            cin >> k;           // K
+            
+            if (userCommand == "request") {
+                cout << "Process " << k << " requests " << i << " units of resource " << j;
+                // Assume the request is accepted
+                Available[j] = Available[j] - i;            // Available decreases by num units req
+                Allocation[i][j] = Allocation[i][j] + i;    // Allocated increased by num units req
+                Need[i][j] = Max[i][j] - Allocation[i][j];
+                // If request is not possible, print it is denied & exit
+                if (Allocation[i][j] > Max[i][j] || Need[i][j] > Available[i]) {
+                    cout << ":denied" << endl;
+                    return 0;
+                }
+            }
+            if (userCommand == "release") {
+                cout << "Process " << k << " releases " << i << " units of resource " << j;
+                // Assume the request is accepted
+                Available[j] = Available[j] + i;            // Available increases by num units req
+                Allocation[i][j] = Allocation[i][j] - i;    // Allocated decreases by num units req
+                Need[i][j] = Max[i][j] - Allocation[i][j];  // Potential req updated
+                // If request is not possible, print it is denied & exit
+                if (Allocation[i][j] > Max[i][j] || Need[i][j] > Available[i]) {
+                    cout << ":denied" << endl;
+                    return 0;
+                }
+            }
+
+        }
+        if (userCommand == "end") {
+            return 0;
+        }
+    }
+    
+    // Delete dynamically created arrays before the program terminates
+    delete[] Available;
+    for (int i = 0; i < num_processes; i++) {
+        delete[] Max[i];
+        delete[] Allocation[i];
+        delete[] Request[i];
+        delete[] Need[i];
+    }
+    delete[] Max;
+    delete[] Allocation;
+    delete[] Request;
+    delete[] Need;
+
     return 0; // terminate normally
 }
